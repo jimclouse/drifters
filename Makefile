@@ -83,11 +83,19 @@ GDP_ALT_TABLE_DEF = (id int, wmo int, expno int, typebuoy varchar(30), ddate dat
 default:
 	sudo apt-get update;
 	sudo apt-get -y install dos2unix;
-	sudo apt-get -y install mysql-server;
+	sudo apt-get -y install mysql-server python2.7-dev python-pip;
+	sudo apt-get -y build-dep python-mysqldb;
+
+	$(MAKE) install_python
 
 
 setup_mysql:
 	create database ocean character set utf8 collate utf8_general_ci;
+
+install_python:
+	easy_install -U distribute;
+	pip install PyYAML;
+	pip install MySQL-python;
 
 # gdp (global drifter program) data contains drifter data sets from 1990-2012 over all the world's oceans
 # this project looks at north atlantic drifters only
@@ -116,3 +124,4 @@ single_view_gdp:
 	
 gdp_all_index:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_MERGETABLE_INDEX)";
+

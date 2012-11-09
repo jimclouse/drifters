@@ -1,1 +1,5 @@
 .vagrant
+src/log/
+*.pyc
+data
+.DS_Store
