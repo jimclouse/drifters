@@ -17,6 +17,7 @@ def writeDriftersToFile(exportDate, drifters):
     writer.writerow(["Id", "obsDateTime", "obsDate", "obsTime", "latitude", "longitude", "longitudeWest", "hasDrogue"])
     for row in drifters:
         rowId = row.get("id")
+        # TODO - add all these to a list and run a loop: 7 lines into 2
         obsDateTime = row.get("obsDateTime")
         obsDate = row.get("obsDate")
         obsTime = row.get("obsTime")
