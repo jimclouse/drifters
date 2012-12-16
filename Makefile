@@ -2,11 +2,12 @@ SHELL=/bin/bash
 MYSQL_USER=root
 MYSQL_PASSWORD=password
 MYSQL_DATABASE=ocean
-GDP_START_YEAR=2005
-GDP_END_YEAR=2011
+GDP_START_YEAR=2000
+GDP_END_YEAR=2012
 
-DATA_PATH=/home/vagrant/ocean/data/
-DATA_PATH_PAC=$(DATA_PATH)drifters/Pacific/
+DATA_PATH=/home/vagrant/ocean/data/drifters/
+DATA_PATH_ATL=$(DATA_PATH)Atlantic/
+DATA_PATH_PAC=$(DATA_PATH)Pacific/
 
 GDP_YEARTABLE_DEF = (id int\
 					,obsDate datetime\
@@ -21,7 +22,7 @@ GDP_YEARTABLE_DEF = (id int\
 					,wmoPlatform int\
 					,hasDrogue boolean);
 
-GDP_MERGETABLE_DROP = drop table if exists gdpAll;
+GDP_ATL_MERGETABLE_DROP = drop table if exists gdpAll;
 GDP_PAC_MERGETABLE_DROP = drop table if exists gdpPacAll;
 GDP_MERGEDTABLE_DEF = (id int\
 					,obsDateTime datetime\
@@ -39,7 +40,7 @@ GDP_MERGEDTABLE_DEF = (id int\
 					,wmoPlatform int\
 					,hasDrogue boolean);
 
-GDP_MERGETABLE_INDEX = alter table gdpAll add index(id, obsDate, obsTime);\
+GDP_ATL_MERGETABLE_INDEX = alter table gdpAll add index(id, obsDate, obsTime);\
 					   alter table gdpAll add index(obsDate, obsTime);\
 					   alter table gdpAll add index(obsTime, obsDate);
 
@@ -109,24 +110,11 @@ load_gdp:
 	number=$(GDP_START_YEAR) ; while [[ $$number -le $(GDP_END_YEAR) ]] ; do \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdp$$number $(GDP_YEARTABLE_DEF)"; \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdp$$number;"; \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH)gdp$$number.csv' into table gdp$$number fields terminated by ',' ;"; \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_ATL)gdp$$number.csv' into table gdp$$number fields terminated by ',' ;"; \
 		((number = number + 1)) ; \
 	done
 
-load_gdp_alt:
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpAlt $(GDP_ALT_TABLE_DEF)"; \
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpAlt;"; \
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH)gdpAlt.csv' into table gdpAlt fields terminated by ',';"; \
 
-single_view_gdp:
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_MERGETABLE_DROP)";
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_MERGEDTABLE_DEF)";
-
-	number=$(GDP_START_YEAR) ; while [[ $$number -le $(GDP_END_YEAR) ]] ; do \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_INSERT)"; \
-		((number = number + 1)) ; \
-	done
-	$(MAKE) gdp_all_index
 
 load_gdp_pac:
 	number=$(GDP_START_YEAR) ; while [[ $$number -le $(GDP_END_YEAR) ]] ; do \
@@ -136,7 +124,19 @@ load_gdp_pac:
 		((number = number + 1)) ; \
 	done
 
+single_view_gdp:
+	# because mysql doesnt support materialized views, need to create a real table to add sufficient indexes
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_MERGETABLE_DROP)";
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_MERGEDTABLE_DEF)";
+
+	number=$(GDP_START_YEAR) ; while [[ $$number -le $(GDP_END_YEAR) ]] ; do \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_INSERT)"; \
+		((number = number + 1)) ; \
+	done
+	$(MAKE) gdp_all_index
+
 single_view_gdp_pac:
+	# because mysql doesnt support materialized views, need to create a real table to add sufficient indexes
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_PAC_MERGETABLE_DROP)";
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpPacAll $(GDP_MERGEDTABLE_DEF)";
 
@@ -146,21 +146,12 @@ single_view_gdp_pac:
 	done
 	$(MAKE) gdp_pacAll_index
 
-load_gts:
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "drop table if exists gts"; \
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gts $(GTS_TABLE_DEF)"; \
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gts;"; \
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH)gts.csv' into table gts fields terminated by ',' IGNORE 1 LINES;"; \
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "alter table gts add index(Identifier); alter table gts add index(Odate, OTime); update gts set Drogue = NULL where Drogue = '         ';"
 
-export_gts:
-	select o.Identifier, o.OTime, o.Lat, o.Lon, -1.0 * o.Lon as InvLong, o.Drogue from gts o join ( select Identifier, min(OTime) as OTime from gts where Odate = '2009-01-29' group by Identifier) i on o.Identifier = i.Identifier and o.OTime = i.OTime where o.Odate = '2009-01-29';
-	
 gdp_pacAll_index:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_PAC_MERGETABLE_INDEX)";
 
 gdp_all_index:
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_MERGETABLE_INDEX)";
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_ATL_MERGETABLE_INDEX)";
 
 export_gdpPac:
 	#mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "select 'id', 'obsDateTime', 'obsDate', 'obstime', 'latitude', 'longitude', 'longitudeWest', 'sst', 'hasDrogue' union select id, obsDateTime, obsDate, obstime, latitude, longitude, longitudeWest, sst, hasDrogue into outfile '/tmp/gdpPac_2006.csv' FIELDS TERMINATED BY ',' LINES TERMINATED BY '\r\n' from gdpPacAll where obsDate >= '2006-01-01' and obsDate < '2006-06-01' and latitude > 0 and longitudeWest < -135;"
