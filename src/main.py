@@ -1,9 +1,10 @@
-import utils
-import ConfigParser
+import csv
 from datetime import date
 from time import strftime
 from datetime import timedelta
-import csv
+
+import utils
+import connection
 
 
 def daterange(start_date, end_date):
@@ -30,13 +31,8 @@ def writeDriftersToFile(exportDate, drifters):
 
 def main():
     utils.mkdir("../data/drifters")
-    _config = ConfigParser.RawConfigParser()
-    _config.read("config.cfg")
 
-    conn = utils.getMysqlConnection(_config.get("db", "host"),
-                                    _config.get("db", "username"),
-                                    _config.get("db", "password"),
-                                    _config.get("db", "database"))
+    conn = connection.new()
 
     sqlDrifterExport = """ SELECT id, obsDateTime, obsDate, obsTime, latitude, longitude, longitudeWest, hasDrogue
                         from gdpAll where obsTime = '6:00' and obsDate = '$$date'

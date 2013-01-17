@@ -95,6 +95,11 @@ default:
 
 	$(MAKE) install_python
 
+lifespan:
+	cd src; python lifespan.py
+
+identify_convergence:
+	cd src; python identifyConvergence.py
 
 setup_mysql:
 	create database ocean character set utf8 collate utf8_general_ci;
