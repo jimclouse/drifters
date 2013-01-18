@@ -25,7 +25,7 @@ def buildLifeTable(ocean='pacific'):
                   GROUP BY  id) AS i
                 WHERE     NOT EXISTS (select 1 from $OCEAN$ where id = i.id and obsdate = '2000-01-01')
                   AND     NOT EXISTS (select 1 from $OCEAN$ where id = i.id and obsdate = '2011-03-01');
-            """
+        """
     results = utils.executeMysql_All(conn, sql.replace('$OCEAN$', ocean))
     lifespans = {}
 
