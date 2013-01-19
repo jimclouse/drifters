@@ -87,6 +87,11 @@ GDP_ALT_TABLE_DEF = (id int, wmo int, expno int, typebuoy varchar(30), ddate dat
 
 GTS_TABLE_DEF = (Identifier int, Odate date, OTime time, Lat float, Lon float, QC_POS smallint ,PDT varchar(12), PTM varchar(12), Drogue varchar(24), SST float, QC_SST varchar(10), Airtemp float, QC_AirT varchar(10), Pressure float, QC_Pr varchar(10), WSp float, QC_WS varchar(10), WDir float, QC_WD varchar(10), RelHum float, QC_RH varchar(10))
 
+GDP_ADJ_DEF = (id varchar(32)\
+					,obsDate date\
+					,obsTime time\
+					,latitude float\
+					,longitude float);
 default:
 	sudo apt-get update;
 	sudo apt-get -y install dos2unix;
@@ -128,6 +133,16 @@ load_gdp_pac:
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_PAC)gdpPac$$number.csv' into table gdpPac$$number fields terminated by ',' ;"; \
 		((number = number + 1)) ; \
 	done
+
+load_gdp_pac_adj:
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpPacAdj $(GDP_ADJ_DEF)"; \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpPacAdj;"; \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_PAC)gdpPacAll_adjusted.txt' into table gdpPacAdj fields terminated by ',' ;"; \
+
+load_gdp_atl_adj:
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpAtlAdj $(GDP_ADJ_DEF)"; \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpAtlAdj;"; \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_PAC)gdpAtlAll_adjusted.txt' into table gdpAtlAdj fields terminated by ',' ;"; \
 
 single_view_gdp:
 	# because mysql doesnt support materialized views, need to create a real table to add sufficient indexes
