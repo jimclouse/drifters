@@ -97,6 +97,7 @@ default:
 	sudo apt-get -y install dos2unix;
 	sudo apt-get -y install mysql-server python2.7-dev python-pip;
 	sudo apt-get -y build-dep python-mysqldb;
+	sudo apt-get install python-numpy python-scipy;
 
 	$(MAKE) install_python
 
