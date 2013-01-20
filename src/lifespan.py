@@ -8,12 +8,15 @@
 """
 import connection
 import utils
+import os
 
 
 def buildLifeTable(ocean='pacific'):
     conn = connection.new()
-    if ocean.lower() == 'atlantic': ocean = 'gdpAtlAll'
-    else: ocean = 'gdpPacAll'
+    f = open(os.path.join(utils.DATA_PATH, 'lifespan_' + ocean + '.csv'), 'w')
+    if ocean.lower() == 'atlantic': ocean = 'gdpAtlAdj'
+    else: ocean = 'gdpPacAdj'
+    
     sql = """ SELECT * FROM (
                   SELECT  id
                           ,min(obsdate) as min
@@ -48,6 +51,7 @@ def buildLifeTable(ocean='pacific'):
         numberAlive = drifterCount - bodycount
         percentAlive = 1.0 - mortalityRate
         print('%i, %.5f, %i, %.5f' % (i, mortalityRate, numberAlive, percentAlive))
+        f.write('%i, %.5f, %i, %.5f\n' % (i, mortalityRate, numberAlive, percentAlive))
 
 
 # what percent of drifters die after X number of days

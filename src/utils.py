@@ -10,6 +10,9 @@ from warnings import resetwarnings
 LOGGING_PATH = "./log"
 ROOT_LOGGER_NAME = "ocean"
 LOGGING_LEVEL = "DEBUG"
+DATA_PATH = os.path.join(os.path.dirname(__file__), '../data')
+DATA_PATH_PAC = os.path.join(DATA_PATH, 'drifters', 'Pacific')
+DATA_PATH_ATL = os.path.join(DATA_PATH, 'drifters', 'Atlantic')
 
 
 def rmdir(directory):

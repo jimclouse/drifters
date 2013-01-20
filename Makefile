@@ -103,6 +103,9 @@ default:
 lifespan:
 	cd src; python lifespan.py
 
+reassign:
+	cd src; python reAssign.py
+
 identify_convergence:
 	cd src; python identifyConvergence.py
 
@@ -124,8 +127,6 @@ load_gdp:
 		((number = number + 1)) ; \
 	done
 
-
-
 load_gdp_pac:
 	number=$(GDP_START_YEAR) ; while [[ $$number -le $(GDP_END_YEAR) ]] ; do \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpPac$$number $(GDP_YEARTABLE_DEF)"; \
@@ -142,7 +143,7 @@ load_gdp_pac_adj:
 load_gdp_atl_adj:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpAtlAdj $(GDP_ADJ_DEF)"; \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpAtlAdj;"; \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_PAC)gdpAtlAll_adjusted.txt' into table gdpAtlAdj fields terminated by ',' ;"; \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_ATL)gdpAtlAll_adjusted.csv' into table gdpAtlAdj fields terminated by ',' ;"; \
 
 single_view_gdp:
 	# because mysql doesnt support materialized views, need to create a real table to add sufficient indexes
