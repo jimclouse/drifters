@@ -110,6 +110,9 @@ reassign:
 identify_convergence:
 	cd src; python identifyConvergence.py
 
+interval_data:
+	cd src; python prepareIntervalData.py
+
 setup_mysql:
 	create database ocean character set utf8 collate utf8_general_ci;
 

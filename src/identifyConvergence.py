@@ -13,6 +13,8 @@ import numpy as np
 lifespan_atlantic = {}
 lifespan_pacific = {}
 
+INTERVALS = range(100, 2001, 100)
+
 
 def newZone(name, latMin, latMax, longMin, longMax):
     """ create a simple dict of long, lat ranges
@@ -59,11 +61,12 @@ def buildQuery(ocean, zone, interval):
     query = query.replace('$MINLONG$', str(zone.get('longMin')))
     query = query.replace('$MAXLONG$', str(zone.get('longMax')))
     query = query.replace('$INTERVAL$', str(interval))
-
     return query
 
 
-def compare(ocean='pacific'):
+def compare(zoneList, ocean='pacific'):
+    """ creates a one-way chi-squared table of all intervals for each zone
+    """
     conn = connection.new()
     lifetable = buildLifeTable(ocean.lower())
     if ocean.lower() == 'atlantic':
@@ -71,41 +74,91 @@ def compare(ocean='pacific'):
     else:
         ocean = 'gdpPacAdj'
 
-    for zone in GZONES:
-        query = buildQuery(ocean, zone, 0)
-        baseline = utils.executeMysql_All(conn, query)
+    for zone in zoneList:
+        print("** Zone Summary: %s" % (zone.get('name')))
+        print("** %s:%sN, %s:%sE" % (zone.get('latMin'), zone.get('latMax'), zone.get('longMin'), zone.get('longMax')))
+        baseline = utils.executeMysql_All(conn, buildQuery(ocean, zone, 0))
         baselineCount = len(baseline)
         expected = []
         observed = []
         for interval in INTERVALS:
-            query = buildQuery(ocean, zone, interval)
-            results = utils.executeMysql_All(conn, query)
-            expectedValue = int(baselineCount - (baselineCount * lifetable.get(interval)))
+            results = utils.executeMysql_All(conn, buildQuery(ocean, zone, interval))
+            expectedValue = int(baselineCount * (1 - lifetable.get(interval)))
             observedValue = int(len(results))
             if observedValue >= 5 and expectedValue >= 5:
                 expected.append(expectedValue)
                 observed.append(observedValue)
+                print('%s (%s): baseline: %i, adjBase: %i, obs: %i'
+                      % (zone.get('name'), interval, baselineCount, expectedValue, observedValue))
             else:
-                print "expected value of 0 found, value not added to chi-squared model"
-            print ('%s (%s): baseline: %i, adjBase: %i, obs: %i'
-                   % (zone.get('name'), interval, baselineCount, expectedValue, observedValue))
-        print("** Zone Summary: %s" % (zone.get('name')))
-        chi = chisquare(np.array(expected), np.array(observed))
-        print("** %f p=%s" % (chi[0], chi[1]))
+                print('%s (%s): ignored because of low values. baseline: %i, adjBase: %i, obs: %i'
+                      % (zone.get('name'), interval, baselineCount, expectedValue, observedValue))
+
+        chi = chisquare(np.array(observed), np.array(expected))
+        print("** Chi-Squared Statistic: %f, p=%s" % (chi[0], chi[1]))
         print("**")
 
-## Global vars. down here so they can make use of methods
-## coordinates of zones we're doing comparisons on.
-GZONES = [newZone('hawaii', 25, 45, -180, 150),
-          newZone('west-pac', 20, 40, 170, 180),
-          newZone('japan', 0, 45, 150, 170),
-          newZone('north-west', 45, 65, 150, 180),
-          newZone('north-east', 45, 65, -180, 130),
-          newZone('south-east', 0, 25, -180, 130),
-          newZone('south-west', 0, 25, 150, 180),
-          ]
 
-INTERVALS = range(100, 2001, 100)
+def compare2(zoneList, ocean='pacific'):
+    """ creates a one-way chi-squared table of all zones for each interval
+    """
+    conn = connection.new()
+    lifetable = buildLifeTable(ocean.lower())
+    if ocean.lower() == 'atlantic':
+        ocean = 'gdpAtlAdj'
+    else:
+        ocean = 'gdpPacAdj'
+
+    for interval in INTERVALS:
+        print("** %s Day Interval Summary" % (interval))
+        expected = []
+        observed = []
+        for zone in zoneList:
+            zoneBaseline = utils.executeMysql_All(conn, buildQuery(ocean, zone, 0))
+            zoneBaselineCount = len(zoneBaseline)
+            results = utils.executeMysql_All(conn, buildQuery(ocean, zone, interval))
+            expectedValue = int(zoneBaselineCount * (1 - lifetable.get(interval)))
+            observedValue = int(len(results))
+            if observedValue >= 5 and expectedValue >= 5:
+                expected.append(expectedValue)
+                observed.append(observedValue)
+                print('%s (%s): baseline: %i, adjBase: %i, obs: %i'
+                      % (zone.get('name'), interval, zoneBaselineCount, expectedValue, observedValue))
+            else:
+                print('%s (%s): ignored because of low values. baseline: %i, adjBase: %i, obs: %i'
+                      % (zone.get('name'), interval, zoneBaselineCount, expectedValue, observedValue))
+
+        if len(expected) == 0:
+            print("** No data for interval %s available" % (interval))
+        else:
+            chi = chisquare(np.array(observed), np.array(expected))
+            print("** Chi-Squared Statistic: %f, p=%s" % (chi[0], chi[1]))
+        print("**")
+
 
 if __name__ == '__main__':
-    compare(ocean='pacific')
+
+    ZONES_PAC = [newZone('hawaii', 25, 40, 127, 180),
+                 newZone('north-east', 35, 65, 125, 180),
+                 newZone('california', 25, 40, 115, 127),
+                 newZone('south-east', 0, 25, 80, 180),
+
+                 newZone('west-pac', 20, 35, -170, -155),
+                 newZone('north-west', 35, 65, -180, -120),
+                 newZone('japan', 20, 35, -155, -115),
+                 newZone('south-west', 0, 20, -180, -115)
+                 ]
+
+    ZONES_ATL = [newZone('sargasso', 24, 35, 50, 70),
+                 newZone('north-west', 35, 65, 50, 82),
+                 newZone('east-coast', 24, 35, 70, 82),
+                 newZone('south-west', 0, 24, 50, 82),
+
+                 newZone('east-atl', 27, 40, 25, 40),
+                 newZone('north-east', 40, 65, 0, 50),
+                 newZone('europe', 27, 40, 0, 25),
+                 newZone('south-east', 0, 27, 0, 50),
+                 newZone('middle-atlantic', 27, 40, 40, 50)
+                 ]
+
+    compare(ZONES_ATL, ocean='atlantic')
