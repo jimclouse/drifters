@@ -13,7 +13,7 @@ import numpy as np
 lifespan_atlantic = {}
 lifespan_pacific = {}
 
-INTERVALS = range(100, 2001, 100)
+INTERVALS = range(100, 1401, 100)
 
 
 def newZone(name, latMin, latMax, longMin, longMax):
@@ -157,8 +157,31 @@ if __name__ == '__main__':
                  newZone('east-atl', 27, 40, 25, 40),
                  newZone('north-east', 40, 65, 0, 50),
                  newZone('europe', 27, 40, 0, 25),
-                 newZone('south-east', 0, 27, 0, 50),
+                 newZone('south-east', 0, 27, -8, 50),
                  newZone('middle-atlantic', 27, 40, 40, 50)
                  ]
 
-    compare(ZONES_ATL, ocean='atlantic')
+    ZONES_SARGASO_1_DEG = [newZone('s1', 34.00001, 35, 50, 70),
+                           newZone('s1', 33.00001, 34, 50, 70),
+                           newZone('s1', 32.00001, 33, 50, 70),
+                           newZone('s1', 31.00001, 32, 50, 70),
+                           newZone('s1', 30.00001, 31, 50, 70),
+                           newZone('s1', 29.00001, 30, 50, 70),
+                           newZone('s1', 28.00001, 29, 50, 70),
+                           newZone('s1', 27.00001, 28, 50, 70),
+                           newZone('s1', 26.00001, 27, 50, 70),
+                           newZone('s1', 25.00001, 26, 50, 70),
+                           newZone('s1', 24, 25, 50, 70)]
+
+    ZONES_SARGASO_2_DEG = [newZone('s1', 40.00001, 42, 50, 70),
+                           newZone('s2', 38.00001, 40, 50, 70),
+                           newZone('s3', 36.00001, 38, 50, 70),
+                           newZone('s4', 34.00001, 36, 50, 70),
+                           newZone('s5', 32.00001, 34, 50, 70),
+                           newZone('s6', 30.00001, 32, 50, 70),
+                           newZone('s7', 28.00001, 30, 50, 70),
+                           newZone('s8', 26.00001, 28, 50, 70),
+                           newZone('s9', 24.00001, 26, 50, 70),
+                           newZone('s10', 22.00001, 24, 50, 70)]
+
+    compare(ZONES_SARGASO_2_DEG, ocean='atlantic')
