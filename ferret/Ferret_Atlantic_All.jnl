@@ -1,7 +1,11 @@
  ! NOAA/PMEL TMAP
  ! FERRET v6.82  
  ! Darwin 9.8.0 - 08/06/12
- ! 31-Dec-12 12:47  
+ ! 31-Dec-12 12:47
+ ! data sets must be downloaded and placed in the ferret netcdf directory prior to running
+ ! chla: http://coastwatch.pfeg.noaa.gov/erddap/griddap/erdMHchla8day
+ ! sst:  http://coastwatch.pfeg.noaa.gov/erddap/griddap/erdGAssta8day
+ ! curl: http://coastwatch.pfeg.noaa.gov/erddap/griddap/erdQSstress8day
 
 SET MEMORY/SIZE=250
 SET WINDOW/SIZE=.9
