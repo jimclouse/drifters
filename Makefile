@@ -13,21 +13,6 @@ MYSQL_DATABASE=ocean
 GDP_START_YEAR=2000
 GDP_END_YEAR=2012
 
-
-
-GDP_YEARTABLE_DEF = (id int\
-					,obsDate datetime\
-					,latitude float\
-					,longitude float\
-					,sst float\
-					,ewct float\
-					,nsct float\
-					,latError float\
-					,longError float\
-					,origExpNum int\
-					,wmoPlatform int\
-					,hasDrogue boolean);
-
 GDP_ATL_MERGETABLE_DROP = drop table if exists gdpAll;
 GDP_PAC_MERGETABLE_DROP = drop table if exists gdpPacAll;
 GDP_MERGEDTABLE_DEF = (id int\
@@ -92,6 +77,7 @@ GTS_TABLE_DEF = (Identifier int, Odate date, OTime time, Lat float, Lon float, Q
 
 # load sql templates from file
 gdp_adjusted=`cat $(SQL_TEMPLATES)/gdp_adjusted.sql.tpl`
+gdp_yearable=`cat $(SQL_TEMPLATES)/gdp_yeartable.sql.tpl`
 
 
 default:
@@ -127,7 +113,7 @@ install_python:
 # this project looks at north atlantic drifters only
 load_gdp:
 	number=$(GDP_START_YEAR) ; while [[ $$number -le $(GDP_END_YEAR) ]] ; do \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdp$$number $(GDP_YEARTABLE_DEF)"; \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdp$$number $(gdp_yearable)"; \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdp$$number;"; \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_ATL)gdp$$number.csv' into table gdp$$number fields terminated by ',' ;"; \
 		((number = number + 1)) ; \
@@ -135,7 +121,7 @@ load_gdp:
 
 load_gdp_pac:
 	number=$(GDP_START_YEAR) ; while [[ $$number -le $(GDP_END_YEAR) ]] ; do \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpPac$$number $(GDP_YEARTABLE_DEF)"; \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpPac$$number $(gdp_yearable)"; \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpPac$$number;"; \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_PAC)gdpPac$$number.csv' into table gdpPac$$number fields terminated by ',' ;"; \
 		((number = number + 1)) ; \
