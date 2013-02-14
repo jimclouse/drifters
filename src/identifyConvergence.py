@@ -16,10 +16,10 @@ lifespan_pacific = {}
 INTERVALS = range(100, 1401, 100)
 
 
-def newZone(name, latMin, latMax, longMin, longMax):
+def newZone(name, latMin, latMax, longMin, longMax, extraCoords=None):
     """ create a simple dict of long, lat ranges
     """
-    return {'name': name, 'latMin': latMin, 'latMax': latMax, 'longMin': longMin, 'longMax': longMax}
+    return {'name': name, 'latMin': latMin, 'latMax': latMax, 'longMin': longMin, 'longMax': longMax, 'extraCoords': extraCoords}
 
 
 def buildLifeTable(ocean):
@@ -64,8 +64,9 @@ def buildQuery(ocean, zone, interval):
     return query
 
 
-def compare(zoneList, ocean='pacific'):
+def compare_incorrect(zoneList, ocean='pacific'):
     """ creates a one-way chi-squared table of all intervals for each zone
+        after discussing with Mark, this is the incorrect way to approach this chi-squared comparison
     """
     conn = connection.new()
     lifetable = buildLifeTable(ocean.lower())
@@ -99,8 +100,31 @@ def compare(zoneList, ocean='pacific'):
         print("**")
 
 
-def compare2(zoneList, ocean='pacific'):
+def getCountOfExtraCoords(conn, zone, ocean, interval):
+    coordinatesList = zone.get('extraCoords')
+    totalCount = 0
+    for t in coordinatesList:
+        r = utils.executeMysql_All(conn, buildQuery(ocean, newZone("na", t[0], t[1], t[2], t[3]), 0))
+        totalCount += len(r)
+    return totalCount
+
+
+def compare(zoneList, ocean='pacific'):
     """ creates a one-way chi-squared table of all zones for each interval
+        1. for each zone, get the percentage of all drifters that exist in it for the baseline
+            a. find the total number
+            b. loop through all zones and compute ratios
+            c. this is the expected ratio
+        2. do the same for each time period
+            a. find the total number of drifters alive
+            b. compute the ratio of drifters in each zone
+            c. this is the observed ratio
+            d. use the expected ratio and observed ratio to calculate expected and observed counts for each zone
+
+        this results in a 9x2 table
+                z1 | z2 | z3 | ...
+        obs |   x  | ...
+        exp |   y  | ...
     """
     conn = connection.new()
     lifetable = buildLifeTable(ocean.lower())
@@ -115,18 +139,23 @@ def compare2(zoneList, ocean='pacific'):
         observed = []
         for zone in zoneList:
             zoneBaseline = utils.executeMysql_All(conn, buildQuery(ocean, zone, 0))
-            zoneBaselineCount = len(zoneBaseline)
-            results = utils.executeMysql_All(conn, buildQuery(ocean, zone, interval))
-            expectedValue = int(zoneBaselineCount * (1 - lifetable.get(interval)))
-            observedValue = int(len(results))
+            zoneBaselineValue = len(zoneBaseline)
+            zoneObserved = utils.executeMysql_All(conn, buildQuery(ocean, zone, interval))
+            observedValue = int(len(zoneObserved))
+            if zone.get('extraCoords'):
+                zoneBaselineValue = zoneBaselineValue + getCountOfExtraCoords(conn, zone, ocean, 0)
+                observedValue = observedValue + getCountOfExtraCoords(conn, zone, ocean, interval)
+
+            expectedValue = int(zoneBaselineValue * (1 - lifetable.get(interval)))
+
             if observedValue >= 5 and expectedValue >= 5:
                 expected.append(expectedValue)
                 observed.append(observedValue)
                 print('%s (%s): baseline: %i, adjBase: %i, obs: %i'
-                      % (zone.get('name'), interval, zoneBaselineCount, expectedValue, observedValue))
+                      % (zone.get('name'), interval, zoneBaselineValue, expectedValue, observedValue))
             else:
                 print('%s (%s): ignored because of low values. baseline: %i, adjBase: %i, obs: %i'
-                      % (zone.get('name'), interval, zoneBaselineCount, expectedValue, observedValue))
+                      % (zone.get('name'), interval, zoneBaselineValue, expectedValue, observedValue))
 
         if len(expected) == 0:
             print("** No data for interval %s available" % (interval))
@@ -138,27 +167,26 @@ def compare2(zoneList, ocean='pacific'):
 
 if __name__ == '__main__':
 
-    ZONES_PAC = [newZone('hawaii', 25, 40, 127, 180),
-                 newZone('north-east', 35, 65, 125, 180),
-                 newZone('california', 25, 40, 115, 127),
-                 newZone('south-east', 0, 25, 80, 180),
-
-                 newZone('west-pac', 20, 35, -170, -155),
-                 newZone('north-west', 35, 65, -180, -120),
-                 newZone('japan', 20, 35, -155, -115),
-                 newZone('south-west', 0, 20, -180, -115)
+    ZONES_PAC = [newZone('hawaii-convergence', 25.00001, 40, 127.00001, 180),
+                 newZone('north-east', 35.00001, 65, 125.00001, 180),
+                 newZone('california', 25.00001, 40, 115.00001, 127),
+                 newZone('south-east', 0.00001, 25, 80.00001, 180),
+                 newZone('west-pacific-convergence', 20.00001, 35, -165.00001, -150),
+                 newZone('north-west', 35.00001, 65, -180.00001, -120),
+                 newZone('japan', 20.00001, 35, -150.00001, -115),
+                 newZone('south-west', 0.00001, 20, -180.00001, -115),
+                 newZone('central-pac-convergence', 20.00001, 35, -180.00001, -165, [(25.00001, 40, 160.00001, 180)])
                  ]
 
-    ZONES_ATL = [newZone('sargasso', 24, 35, 50, 70),
-                 newZone('north-west', 35, 65, 50, 82),
-                 newZone('east-coast', 24, 35, 70, 82),
-                 newZone('south-west', 0, 24, 50, 82),
-
-                 newZone('east-atl', 27, 40, 25, 40),
-                 newZone('north-east', 40, 65, 0, 50),
-                 newZone('europe', 27, 40, 0, 25),
-                 newZone('south-east', 0, 27, -8, 50),
-                 newZone('middle-atlantic', 27, 40, 40, 50)
+    ZONES_ATL = [newZone('sargasso-convergence', 24.00001, 35, 50.00001, 70),
+                 newZone('north-west', 35.00001, 65, 50.00001, 82),
+                 newZone('east-coast', 24.00001, 35, 70.00001, 82),
+                 newZone('south-west', 0.00001, 24, 50.00001, 82),
+                 newZone('east-atlantic-convergence', 27.00001, 40, 25.00001, 40),
+                 newZone('north-east', 40.00001, 65, 0.00001, 50),
+                 newZone('europe', 27.00001, 40, 0.00001, 25),
+                 newZone('south-east', 0.00001, 27, -8.00001, 50),
+                 newZone('central-atlantic-convergence', 27.00001, 40, 40.00001, 50)
                  ]
 
     ZONES_SARGASO_1_DEG = [newZone('s1', 34.00001, 35, 50, 70),
@@ -184,4 +212,4 @@ if __name__ == '__main__':
                            newZone('s9', 24.00001, 26, 50, 70),
                            newZone('s10', 22.00001, 24, 50, 70)]
 
-    compare(ZONES_SARGASO_2_DEG, ocean='atlantic')
+    compare(ZONES_PAC, ocean='pacific')
