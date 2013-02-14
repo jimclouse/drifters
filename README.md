@@ -19,4 +19,3 @@ After cloning the project, run sudo Make to install the required software.
 There are various make targets that run different parts of the analysis.
 
 The project includes a Vagrant file, which can be used to spin up a new VM.
-

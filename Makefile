@@ -1,26 +1,17 @@
+#
 SHELL=/bin/bash
-MYSQL_USER=root
-MYSQL_PASSWORD=password
-MYSQL_DATABASE=ocean
-GDP_START_YEAR=2000
-GDP_END_YEAR=2012
-
-DATA_PATH=/home/vagrant/ocean/data/drifters/
+HOME=$(shell pwd)
+SQL_TEMPLATES=$(HOME)/sql/templates
+DATA_PATH=$(HOME)/data/drifters/
 DATA_PATH_ATL=$(DATA_PATH)Atlantic/
 DATA_PATH_PAC=$(DATA_PATH)Pacific/
 
-GDP_YEARTABLE_DEF = (id int\
-					,obsDate datetime\
-					,latitude float\
-					,longitude float\
-					,sst float\
-					,ewct float\
-					,nsct float\
-					,latError float\
-					,longError float\
-					,origExpNum int\
-					,wmoPlatform int\
-					,hasDrogue boolean);
+MYSQL_USER=root
+MYSQL_PASSWORD=password
+MYSQL_DATABASE=ocean
+
+GDP_START_YEAR=2000
+GDP_END_YEAR=2012
 
 GDP_ATL_MERGETABLE_DROP = drop table if exists gdpAll;
 GDP_PAC_MERGETABLE_DROP = drop table if exists gdpPacAll;
@@ -82,16 +73,13 @@ GDP_INSERT = (id\
 	order by 		id\
 					,obsDate;
 
-
-GDP_ALT_TABLE_DEF = (id int, wmo int, expno int, typebuoy varchar(30), ddate date, dtime time, dlat float, dlon float, edate date, etime time, elat float, elon float, ldate date, ltime time, typedeath varchar(64) );
-
 GTS_TABLE_DEF = (Identifier int, Odate date, OTime time, Lat float, Lon float, QC_POS smallint ,PDT varchar(12), PTM varchar(12), Drogue varchar(24), SST float, QC_SST varchar(10), Airtemp float, QC_AirT varchar(10), Pressure float, QC_Pr varchar(10), WSp float, QC_WS varchar(10), WDir float, QC_WD varchar(10), RelHum float, QC_RH varchar(10))
 
-GDP_ADJ_DEF = (id varchar(32)\
-					,obsDate date\
-					,obsTime time\
-					,latitude float\
-					,longitude float);
+# load sql templates from file
+gdp_adjusted=`cat $(SQL_TEMPLATES)/gdp_adjusted.sql.tpl`
+gdp_yearable=`cat $(SQL_TEMPLATES)/gdp_yeartable.sql.tpl`
+
+
 default:
 	sudo apt-get update;
 	sudo apt-get -y install dos2unix;
@@ -125,7 +113,7 @@ install_python:
 # this project looks at north atlantic drifters only
 load_gdp:
 	number=$(GDP_START_YEAR) ; while [[ $$number -le $(GDP_END_YEAR) ]] ; do \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdp$$number $(GDP_YEARTABLE_DEF)"; \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdp$$number $(gdp_yearable)"; \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdp$$number;"; \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_ATL)gdp$$number.csv' into table gdp$$number fields terminated by ',' ;"; \
 		((number = number + 1)) ; \
@@ -133,21 +121,21 @@ load_gdp:
 
 load_gdp_pac:
 	number=$(GDP_START_YEAR) ; while [[ $$number -le $(GDP_END_YEAR) ]] ; do \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpPac$$number $(GDP_YEARTABLE_DEF)"; \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpPac$$number $(gdp_yearable)"; \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpPac$$number;"; \
 		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_PAC)gdpPac$$number.csv' into table gdpPac$$number fields terminated by ',' ;"; \
 		((number = number + 1)) ; \
 	done
 
 load_gdp_pac_adj:
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpPacAdj $(GDP_ADJ_DEF)"; \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpPacAdj;"; \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_PAC)gdpPacAll_adjusted.txt' into table gdpPacAdj fields terminated by ',' ;"; \
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpPacAdj $(gdp_adjusted)";
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpPacAdj;";
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_PAC)gdpPacAll_adjusted.txt' into table gdpPacAdj fields terminated by ',' ;";
 
 load_gdp_atl_adj:
-	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpAtlAdj $(GDP_ADJ_DEF)"; \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpAtlAdj;"; \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_ATL)gdpAtlAll_adjusted.csv' into table gdpAtlAdj fields terminated by ',' ;"; \
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpAtlAdj $(gdp_adjusted)";
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpAtlAdj;";
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_ATL)gdpAtlAll_adjusted.csv' into table gdpAtlAdj fields terminated by ',' ;";
 
 single_view_gdp:
 	# because mysql doesnt support materialized views, need to create a real table to add sufficient indexes
