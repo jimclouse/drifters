@@ -127,35 +127,59 @@ def compare(zoneList, ocean='pacific'):
         exp |   y  | ...
     """
     conn = connection.new()
-    lifetable = buildLifeTable(ocean.lower())
+    #lifetable = buildLifeTable(ocean.lower())
     if ocean.lower() == 'atlantic':
         ocean = 'gdpAtlAdj'
     else:
         ocean = 'gdpPacAdj'
 
+    # get baseline data for each zone
+    for zone in zoneList:
+        zone["baselineCount"] = len(utils.executeMysql_All(conn, buildQuery(ocean, zone, 0)))
+        if zone.get('extraCoords'):
+            zone["baselineCount"] = zone.get("baselineCount", 0) + getCountOfExtraCoords(conn, zone, ocean, 0)
+
+    # get total drifter count
+    baselineDrifterCount = 0
+    for zone in zoneList:
+        baselineDrifterCount = baselineDrifterCount + zone.get("baselineCount")
+
+    # define baseline ratios
+    for zone in zoneList:
+        zone["baselineRatio"] = zone.get("baselineCount") / float(baselineDrifterCount)
+        print zone.get("baselineRatio")
+
+    print baselineDrifterCount
+
     for interval in INTERVALS:
         print("** %s Day Interval Summary" % (interval))
         expected = []
         observed = []
+
+        # get interval zone counts
         for zone in zoneList:
-            zoneBaseline = utils.executeMysql_All(conn, buildQuery(ocean, zone, 0))
-            zoneBaselineValue = len(zoneBaseline)
-            zoneObserved = utils.executeMysql_All(conn, buildQuery(ocean, zone, interval))
-            observedValue = int(len(zoneObserved))
+            zone["intervalCount"] = len(utils.executeMysql_All(conn, buildQuery(ocean, zone, interval)))
             if zone.get('extraCoords'):
-                zoneBaselineValue = zoneBaselineValue + getCountOfExtraCoords(conn, zone, ocean, 0)
-                observedValue = observedValue + getCountOfExtraCoords(conn, zone, ocean, interval)
+                zone["intervalCount"] = zone.get("intervalCount", 0) + getCountOfExtraCoords(conn, zone, ocean, interval)
 
-            expectedValue = int(zoneBaselineValue * (1 - lifetable.get(interval)))
+        # get total interval count
+        intervalDrifterCount = 0
+        for zone in zoneList:
+            intervalDrifterCount = intervalDrifterCount + zone.get("intervalCount")
 
-            if observedValue >= 5 and expectedValue >= 5:
-                expected.append(expectedValue)
-                observed.append(observedValue)
-                print('%s (%s): baseline: %i, adjBase: %i, obs: %i'
-                      % (zone.get('name'), interval, zoneBaselineValue, expectedValue, observedValue))
-            else:
-                print('%s (%s): ignored because of low values. baseline: %i, adjBase: %i, obs: %i'
-                      % (zone.get('name'), interval, zoneBaselineValue, expectedValue, observedValue))
+        # define interval ratios
+        for zone in zoneList:
+            zone["intervalExpectedCount"] = intervalDrifterCount * zone.get("baselineRatio")
+
+        for zone in zoneList:
+            #if observedValue >= 5 and expectedValue >= 5:
+            expected.append(zone.get("intervalExpectedCount"))
+            observed.append(zone.get("intervalCount"))
+            print('%s: baseline ratio: %f, no. drifters: %i, expected: %f, observed: %f'
+                  % (zone.get('name'), zone.get("baselineRatio"), intervalDrifterCount, zone.get("intervalExpectedCount"), zone.get("intervalCount")))
+            # else:
+            #     print('%s (%s): ignored because of low values. baseline: %i, adjBase: %i, obs: %i'
+            #           % (zone.get('name'), interval, zoneBaselineValue, expectedValue, observedValue))
 
         if len(expected) == 0:
             print("** No data for interval %s available" % (interval))
@@ -167,15 +191,15 @@ def compare(zoneList, ocean='pacific'):
 
 if __name__ == '__main__':
 
-    ZONES_PAC = [newZone('hawaii-convergence', 25.00001, 40, 127.00001, 180),
-                 newZone('north-east', 35.00001, 65, 125.00001, 180),
-                 newZone('california', 25.00001, 40, 115.00001, 127),
-                 newZone('south-east', 0.00001, 25, 80.00001, 180),
+    ZONES_PAC = [newZone('      hawaii-convergence', 25.00001, 40, 127.00001, 180),
+                 newZone('              north-east', 35.00001, 65, 125.00001, 180),
+                 newZone('              california', 25.00001, 40, 115.00001, 127),
+                 newZone('              south-east', 0.00001, 25, 80.00001, 180),
                  newZone('west-pacific-convergence', 20.00001, 35, -165.00001, -150),
-                 newZone('north-west', 35.00001, 65, -180.00001, -120),
-                 newZone('japan', 20.00001, 35, -150.00001, -115),
-                 newZone('south-west', 0.00001, 20, -180.00001, -115),
-                 newZone('central-pac-convergence', 20.00001, 35, -180.00001, -165, [(25.00001, 40, 160.00001, 180)])
+                 newZone('              north-west', 35.00001, 65, -180.00001, -120),
+                 newZone('                   japan', 20.00001, 35, -150.00001, -115),
+                 newZone('              south-west', 0.00001, 20, -180.00001, -115),
+                 newZone(' central-pac-convergence', 20.00001, 35, -180.00001, -165, [(25.00001, 40, 160.00001, 180)])
                  ]
 
     ZONES_ATL = [newZone('sargasso-convergence', 24.00001, 35, 50.00001, 70),
