@@ -8,12 +8,13 @@ import utils
 import os
 import csv
 from scipy.stats import chisquare
+from scipy.stats import fisher_exact
 import numpy as np
 
 lifespan_atlantic = {}
 lifespan_pacific = {}
 
-INTERVALS = range(100, 1401, 100)
+INTERVALS = range(0, 1201, 100)
 
 
 def newZone(name, latMin, latMax, longMin, longMax, extraCoords=None):
@@ -125,6 +126,10 @@ def compare(zoneList, ocean='pacific'):
                 z1 | z2 | z3 | ...
         obs |   x  | ...
         exp |   y  | ...
+
+        Null Hypothesis: Each zone has an evenly distributed probability of occuring
+        Alt Hypothesis: At least one of the proportions is different from predicted
+
     """
     conn = connection.new()
     #lifetable = buildLifeTable(ocean.lower())
@@ -149,38 +154,38 @@ def compare(zoneList, ocean='pacific'):
         zone["baselineRatio"] = zone.get("baselineCount") / float(baselineDrifterCount)
         print zone.get("baselineRatio")
 
-    print baselineDrifterCount
-
+    # loop through intervals, running chi-square at each interval
     for interval in INTERVALS:
-        print("** %s Day Interval Summary" % (interval))
+        print("********************************")
+        print("** %s Day Interval Summary **" % (interval))
         expected = []
         observed = []
 
         # get interval zone counts
         for zone in zoneList:
-            zone["intervalCount"] = len(utils.executeMysql_All(conn, buildQuery(ocean, zone, interval)))
+            zone["intervalObserved"] = len(utils.executeMysql_All(conn, buildQuery(ocean, zone, interval)))
             if zone.get('extraCoords'):
-                zone["intervalCount"] = zone.get("intervalCount", 0) + getCountOfExtraCoords(conn, zone, ocean, interval)
+                zone["intervalObserved"] = zone.get("intervalObserved", 0) + getCountOfExtraCoords(conn, zone, ocean, interval)
 
         # get total interval count
-        intervalDrifterCount = 0
+        totalObserved = 0
         for zone in zoneList:
-            intervalDrifterCount = intervalDrifterCount + zone.get("intervalCount")
+            totalObserved = totalObserved + zone.get("intervalObserved")
 
-        # define interval ratios
+        # collect obs & exp data into list for each zone
         for zone in zoneList:
-            zone["intervalExpectedCount"] = intervalDrifterCount * zone.get("baselineRatio")
-
-        for zone in zoneList:
+            intervalExpected = totalObserved * zone.get("baselineRatio")
+            zone["intervalExpected"] = intervalExpected
             #if observedValue >= 5 and expectedValue >= 5:
-            expected.append(zone.get("intervalExpectedCount"))
-            observed.append(zone.get("intervalCount"))
+            expected.append(intervalExpected)
+            observed.append(zone.get("intervalObserved"))
             print('%s: baseline ratio: %f, no. drifters: %i, expected: %f, observed: %f'
-                  % (zone.get('name'), zone.get("baselineRatio"), intervalDrifterCount, zone.get("intervalExpectedCount"), zone.get("intervalCount")))
+                  % (zone.get('name'), zone.get("baselineRatio"), totalObserved, intervalExpected, zone.get("intervalObserved")))
             # else:
             #     print('%s (%s): ignored because of low values. baseline: %i, adjBase: %i, obs: %i'
             #           % (zone.get('name'), interval, zoneBaselineValue, expectedValue, observedValue))
 
+        # perform and report on chi-square
         if len(expected) == 0:
             print("** No data for interval %s available" % (interval))
         else:
@@ -188,9 +193,34 @@ def compare(zoneList, ocean='pacific'):
             print("** Chi-Squared Statistic: %f, p=%s" % (chi[0], chi[1]))
         print("**")
 
+        for zone in zoneList:
+            # perform Fisher's Exact Test on each zone to determine differnce with rest of data
+            fishers(zone, zone.get("intervalExpected"), zone.get("intervalObserved"), baselineDrifterCount)
+
+        print("\n\n")
+
+
+def fishers(zone, zoneExpected, zoneObserved, globalCount):
+    """ The null hypothesis is that the relative proportions of one variable are independent
+        of the second variable. For example, if you counted the number of male and female mice
+        in two barns, the null hypothesis would be that the proportion of male mice is the
+        same in the two barns.
+        http://udel.edu/~mcdonald/statfishers.html
+        inputs: zone expected, zone observed, not zone expected, not zone observed
+                in zone     not in zone
+    observed    a           b
+    expected    c           d
+    """
+    notZoneExpected = globalCount - zoneExpected
+    notZoneObserved = globalCount - zoneObserved
+
+    odds, pval = fisher_exact([[zoneObserved, notZoneObserved], [zoneExpected, notZoneExpected]])
+    print("** Fishers Exact: %s: odds: %s, p: %s" % (zone.get('name'), odds, pval))
+
 
 if __name__ == '__main__':
-
+    """ main method. defines zones and runs main executable
+    """
     ZONES_PAC = [newZone('      hawaii-convergence', 25.00001, 40, 127.00001, 180),
                  newZone('              north-east', 35.00001, 65, 125.00001, 180),
                  newZone('              california', 25.00001, 40, 115.00001, 127),
