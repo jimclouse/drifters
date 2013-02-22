@@ -214,21 +214,24 @@ def fishers(zone, zoneExpected, zoneObserved, globalCount):
     notZoneExpected = globalCount - zoneExpected
     notZoneObserved = globalCount - zoneObserved
 
-    odds, pval = fisher_exact([[zoneObserved, notZoneObserved], [zoneExpected, notZoneExpected]])
-    print("** Fishers Exact: %s: odds: %s, p: %s" % (zone.get('name'), odds, pval))
+    if zoneExpected < 1 and zoneObserved == 0:
+        print("** values too low")
+    else:
+        odds, pval = fisher_exact([[zoneObserved, notZoneObserved], [zoneExpected, notZoneExpected]])
+        print("** Fishers Exact: %s: odds: %s, p: %s" % (zone.get('name'), odds, pval))
 
 
 if __name__ == '__main__':
     """ main method. defines zones and runs main executable
     """
-    ZONES_PAC = [newZone('      hawaii-convergence', 25.00001, 40, 127.00001, 180),
-                 newZone('              north-east', 35.00001, 65, 125.00001, 180),
+    ZONES_PAC = [newZone('      hawaii-convergence', 25.00001, 40, 127.00001, 160),
+                 newZone('              north-east', 40.00001, 60, 120.00001, 180),
                  newZone('              california', 25.00001, 40, 115.00001, 127),
-                 newZone('              south-east', 0.00001, 25, 80.00001, 180),
+                 newZone('              south-east', 0.00001, 25, 75.00001, 180),
                  newZone('west-pacific-convergence', 20.00001, 35, -165.00001, -150),
-                 newZone('              north-west', 35.00001, 65, -180.00001, -120),
-                 newZone('                   japan', 20.00001, 35, -150.00001, -115),
-                 newZone('              south-west', 0.00001, 20, -180.00001, -115),
+                 newZone('              north-west', 35.00001, 60, -180.00001, -100),
+                 newZone('                   japan', 20.00001, 35, -150.00001, -100),
+                 newZone('              south-west', 0.00001, 20, -180.00001, -100),
                  newZone(' central-pac-convergence', 20.00001, 35, -180.00001, -165, [(25.00001, 40, 160.00001, 180)])
                  ]
 
