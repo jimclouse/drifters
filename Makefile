@@ -80,6 +80,7 @@ gdp_adjusted=`cat $(SQL_TEMPLATES)/gdp_adjusted.sql.tpl`
 gdp_yearable=`cat $(SQL_TEMPLATES)/gdp_yeartable.sql.tpl`
 fisherResultsTable=`cat $(SQL_TEMPLATES)/fisherResults.sql.tpl`
 fn_significance=`cat $(SQL_TEMPLATES)/fn_significance.sql.tpl`
+chiSquareResults=`cat $(SQL_TEMPLATES)/chiSquareResults.sql.tpl`
 
 
 default:
@@ -164,7 +165,7 @@ single_view_gdp_pac:
 setup_results_tables:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(fisherResultsTable)";
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(fn_significance)";
-
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(chiSquareResults)";
 
 gdp_pacAll_index:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_PAC_MERGETABLE_INDEX)";
