@@ -78,6 +78,8 @@ GTS_TABLE_DEF = (Identifier int, Odate date, OTime time, Lat float, Lon float, Q
 # load sql templates from file
 gdp_adjusted=`cat $(SQL_TEMPLATES)/gdp_adjusted.sql.tpl`
 gdp_yearable=`cat $(SQL_TEMPLATES)/gdp_yeartable.sql.tpl`
+fisherResultsTable=`cat $(SQL_TEMPLATES)/fisherResults.sql.tpl`
+fn_significance=`cat $(SQL_TEMPLATES)/fn_significance.sql.tpl`
 
 
 default:
@@ -158,6 +160,10 @@ single_view_gdp_pac:
 		((number = number + 1)) ; \
 	done
 	$(MAKE) gdp_pacAll_index
+
+setup_results_tables:
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(fisherResultsTable)";
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(fn_significance)";
 
 
 gdp_pacAll_index:
