@@ -138,6 +138,10 @@ def compare(zoneList, ocean='pacific'):
     else:
         ocean = 'gdpPacAdj'
 
+    # clean fishers results table
+    sql = "delete from fisherResults where ocean = '" + ocean + "';"
+    utils.executeMysql_All(conn, sql)
+
     # get baseline data for each zone
     for zone in zoneList:
         zone["baselineCount"] = len(utils.executeMysql_All(conn, buildQuery(ocean, zone, 0)))
@@ -195,12 +199,18 @@ def compare(zoneList, ocean='pacific'):
 
         for zone in zoneList:
             # perform Fisher's Exact Test on each zone to determine differnce with rest of data
-            fishers(zone, zone.get("intervalExpected"), zone.get("intervalObserved"), baselineDrifterCount)
+            fishers(ocean, conn, interval, zone, zone.get("intervalExpected"), zone.get("intervalObserved"), baselineDrifterCount)
 
         print("\n\n")
 
 
-def fishers(zone, zoneExpected, zoneObserved, globalCount):
+def formatOdds(val):
+    val = str(val)
+    if val == 'inf': return '9999'
+    return val
+
+
+def fishers(ocean, conn, interval, zone, zoneExpected, zoneObserved, globalCount):
     """ The null hypothesis is that the relative proportions of one variable are independent
         of the second variable. For example, if you counted the number of male and female mice
         in two barns, the null hypothesis would be that the proportion of male mice is the
@@ -218,21 +228,23 @@ def fishers(zone, zoneExpected, zoneObserved, globalCount):
         print("** values too low")
     else:
         odds, pval = fisher_exact([[zoneObserved, notZoneObserved], [zoneExpected, notZoneExpected]])
+        sql = "insert into fisherResults (ocean, zone, period, fisher, sig) values('" + ocean + "', '" + zone.get('name') + "', '" + str(interval) + "', " + formatOdds(odds) + ", " + str(pval) + ")"
+        utils.executeMysql_All(conn, sql)
         print("** Fishers Exact: %s: odds: %s, p: %s" % (zone.get('name'), odds, pval))
 
 
 if __name__ == '__main__':
     """ main method. defines zones and runs main executable
     """
-    ZONES_PAC = [newZone('      hawaii-convergence', 25.00001, 40, 127.00001, 160),
-                 newZone('              north-east', 40.00001, 60, 120.00001, 180),
-                 newZone('              california', 25.00001, 40, 115.00001, 127),
-                 newZone('              south-east', 0.00001, 25, 75.00001, 180),
-                 newZone('west-pacific-convergence', 20.00001, 35, -165.00001, -150),
-                 newZone('              north-west', 35.00001, 60, -180.00001, -100),
-                 newZone('                   japan', 20.00001, 35, -150.00001, -100),
-                 newZone('              south-west', 0.00001, 20, -180.00001, -100),
-                 newZone(' central-pac-convergence', 20.00001, 35, -180.00001, -165, [(25.00001, 40, 160.00001, 180)])
+    ZONES_PAC = [newZone('      Hawaii-convergence', 25.00001, 40, 140.00001, 160),
+                 newZone(' Central-pac-convergence', 25.00001, 40, 160.00001, 180),
+                 newZone('West-pacific-convergence', 20.00001, 35, -180.00001, -160),
+                 newZone('              North-east', 40.00001, 60, 120.00001, 180),
+                 newZone('              California', 25.00001, 40, 115.00001, 140),
+                 newZone('              South-east', 0.00001, 25, 75.00001, 180),
+                 newZone('              South-west', 0.00001, 20, -180.00001, -100),
+                 newZone('                   Japan', 20.00001, 35, -160.00001, -100),
+                 newZone('              North-west', 35.00001, 60, -180.00001, -100)
                  ]
 
     ZONES_ATL = [newZone('sargasso-convergence', 24.00001, 35, 50.00001, 70),
