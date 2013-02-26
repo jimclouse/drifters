@@ -141,6 +141,8 @@ def compare(zoneList, ocean='pacific'):
     # clean fishers results table
     sql = "delete from fisherResults where ocean = '" + ocean + "';"
     utils.executeMysql_All(conn, sql)
+    sql = "delete from chiSquareResults where ocean = '" + ocean + "';"
+    utils.executeMysql_All(conn, sql)
 
     # get baseline data for each zone
     for zone in zoneList:
@@ -195,6 +197,9 @@ def compare(zoneList, ocean='pacific'):
         else:
             chi = chisquare(np.array(observed), np.array(expected))
             print("** Chi-Squared Statistic: %f, p=%s" % (chi[0], chi[1]))
+            sql = "insert into chiSquareResults (ocean, period, chiStat, sig, sigStr) values('" + ocean + "', '" + str(interval) + "', " + str(chi[0]) + ", " + str("{0:.4f}".format(float(chi[1]))) + ", '" + str(float(chi[1])) + "')"
+            print sql
+            utils.executeMysql_All(conn, sql)
         print("**")
 
         for zone in zoneList:
@@ -207,7 +212,7 @@ def compare(zoneList, ocean='pacific'):
 def formatOdds(val):
     val = str(val)
     if val == 'inf': return '9999'
-    return val
+    return "{0:.3f}".format(float(val))
 
 
 def fishers(ocean, conn, interval, zone, zoneExpected, zoneObserved, globalCount):
@@ -227,10 +232,10 @@ def fishers(ocean, conn, interval, zone, zoneExpected, zoneObserved, globalCount
     if zoneExpected < 1 and zoneObserved == 0:
         print("** values too low")
     else:
-        odds, pval = fisher_exact([[zoneObserved, notZoneObserved], [zoneExpected, notZoneExpected]])
+        odds, pval = fisher_exact(np.array([[zoneObserved, notZoneObserved], [zoneExpected, notZoneExpected]]))
         sql = "insert into fisherResults (ocean, zone, period, fisher, sig) values('" + ocean + "', '" + zone.get('name') + "', '" + str(interval) + "', " + formatOdds(odds) + ", " + str(pval) + ")"
         utils.executeMysql_All(conn, sql)
-        print("** Fishers Exact: %s: odds: %s, p: %s" % (zone.get('name'), odds, pval))
+        print("** Fishers Exact: %s: odds: %s, p: %s" % (zone.get('name'), formatOdds(odds), pval))
 
 
 if __name__ == '__main__':
@@ -247,15 +252,15 @@ if __name__ == '__main__':
                  newZone('              North-west', 35.00001, 60, -180.00001, -100)
                  ]
 
-    ZONES_ATL = [newZone('sargasso-convergence', 24.00001, 35, 50.00001, 70),
-                 newZone('north-west', 35.00001, 65, 50.00001, 82),
-                 newZone('east-coast', 24.00001, 35, 70.00001, 82),
-                 newZone('south-west', 0.00001, 24, 50.00001, 82),
-                 newZone('east-atlantic-convergence', 27.00001, 40, 25.00001, 40),
-                 newZone('north-east', 40.00001, 65, 0.00001, 50),
-                 newZone('europe', 27.00001, 40, 0.00001, 25),
-                 newZone('south-east', 0.00001, 27, -8.00001, 50),
-                 newZone('central-atlantic-convergence', 27.00001, 40, 40.00001, 50)
+    ZONES_ATL = [newZone('        Sargasso-convergence', 20.00001, 35, 50.00001, 70),
+                 newZone('Central-atlantic-convergence', 27.00001, 40, 40.00001, 50),
+                 newZone('   East-atlantic-convergence', 27.00001, 40, 25.00001, 40),
+                 newZone('                  North-east', 40.00001, 60, 0.00001, 50),
+                 newZone('                      Europe', 27.00001, 40, 0.00001, 25),
+                 newZone('                  South-east', 0.00001, 27, -8.00001, 50),
+                 newZone('                  South-west', 0.00001, 20, 50.00001, 82),
+                 newZone('                  East-coast', 20.00001, 35, 70.00001, 82),
+                 newZone('                  North-west', 35.00001, 60, 50.00001, 82)
                  ]
 
     ZONES_SARGASO_1_DEG = [newZone('s1', 34.00001, 35, 50, 70),
@@ -281,4 +286,5 @@ if __name__ == '__main__':
                            newZone('s9', 24.00001, 26, 50, 70),
                            newZone('s10', 22.00001, 24, 50, 70)]
 
-    compare(ZONES_PAC, ocean='pacific')
+    compare(ZONES_ATL, ocean='atlantic')
+    #compare(ZONES_PAC, ocean='pacific')
