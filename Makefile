@@ -81,6 +81,7 @@ gdp_yearable=`cat $(SQL_TEMPLATES)/gdp_yeartable.sql.tpl`
 fisherResultsTable=`cat $(SQL_TEMPLATES)/fisherResults.sql.tpl`
 fn_significance=`cat $(SQL_TEMPLATES)/fn_significance.sql.tpl`
 chiSquareResults=`cat $(SQL_TEMPLATES)/chiSquareResults.sql.tpl`
+chiResiduals=`cat $(SQL_TEMPLATES)/chiResiduals.sql.tpl`
 
 
 default:
@@ -88,7 +89,7 @@ default:
 	sudo apt-get -y install dos2unix;
 	sudo apt-get -y install mysql-server python2.7-dev python-pip;
 	sudo apt-get -y build-dep python-mysqldb;
-	sudo apt-get install python-numpy python-scipy;
+	sudo apt-get -y install python-numpy python-scipy r-base;
 
 	$(MAKE) install_python
 
@@ -111,6 +112,7 @@ install_python:
 	easy_install -U distribute;
 	pip install PyYAML;
 	pip install MySQL-python;
+	pip install rpy2
 
 # gdp (global drifter program) data contains drifter data sets from 1990-2012 over all the world's oceans
 # this project looks at north atlantic drifters only
@@ -166,6 +168,7 @@ setup_results_tables:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(fisherResultsTable)";
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(fn_significance)";
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(chiSquareResults)";
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(chiResiduals)";
 
 gdp_pacAll_index:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_PAC_MERGETABLE_INDEX)";
