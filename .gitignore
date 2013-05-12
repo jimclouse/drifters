@@ -3,3 +3,5 @@ src/log/
 *.pyc
 data
 .DS_Store
+build
+tmp
