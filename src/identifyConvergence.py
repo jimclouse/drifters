@@ -10,6 +10,10 @@ import csv
 from scipy.stats import chisquare
 from scipy.stats import fisher_exact
 import numpy as np
+from rpy2 import robjects
+import rpy2.robjects.numpy2ri
+rpy2.robjects.numpy2ri.activate()
+rpy2.robjects.r['options'](warn=-1)
 
 lifespan_atlantic = {}
 lifespan_pacific = {}
@@ -65,48 +69,12 @@ def buildQuery(ocean, zone, interval):
     return query
 
 
-def compare_incorrect(zoneList, ocean='pacific'):
-    """ creates a one-way chi-squared table of all intervals for each zone
-        after discussing with Mark, this is the incorrect way to approach this chi-squared comparison
-    """
-    conn = connection.new()
-    lifetable = buildLifeTable(ocean.lower())
-    if ocean.lower() == 'atlantic':
-        ocean = 'gdpAtlAdj'
-    else:
-        ocean = 'gdpPacAdj'
-
-    for zone in zoneList:
-        print("** Zone Summary: %s" % (zone.get('name')))
-        print("** %s:%sN, %s:%sE" % (zone.get('latMin'), zone.get('latMax'), zone.get('longMin'), zone.get('longMax')))
-        baseline = utils.executeMysql_All(conn, buildQuery(ocean, zone, 0))
-        baselineCount = len(baseline)
-        expected = []
-        observed = []
-        for interval in INTERVALS:
-            results = utils.executeMysql_All(conn, buildQuery(ocean, zone, interval))
-            expectedValue = int(baselineCount * (1 - lifetable.get(interval)))
-            observedValue = int(len(results))
-            if observedValue >= 5 and expectedValue >= 5:
-                expected.append(expectedValue)
-                observed.append(observedValue)
-                print('%s (%s): baseline: %i, adjBase: %i, obs: %i'
-                      % (zone.get('name'), interval, baselineCount, expectedValue, observedValue))
-            else:
-                print('%s (%s): ignored because of low values. baseline: %i, adjBase: %i, obs: %i'
-                      % (zone.get('name'), interval, baselineCount, expectedValue, observedValue))
-
-        chi = chisquare(np.array(observed), np.array(expected))
-        print("** Chi-Squared Statistic: %f, p=%s" % (chi[0], chi[1]))
-        print("**")
-
-
 def getCountOfExtraCoords(conn, zone, ocean, interval):
     coordinatesList = zone.get('extraCoords')
     totalCount = 0
     for t in coordinatesList:
-        r = utils.executeMysql_All(conn, buildQuery(ocean, newZone("na", t[0], t[1], t[2], t[3]), 0))
-        totalCount += len(r)
+        rec = utils.executeMysql_All(conn, buildQuery(ocean, newZone("na", t[0], t[1], t[2], t[3]), 0))
+        totalCount += len(rec)
     return totalCount
 
 
@@ -143,6 +111,10 @@ def compare(zoneList, ocean='pacific'):
     utils.executeMysql_All(conn, sql)
     sql = "delete from chiSquareResults where ocean = '" + ocean + "';"
     utils.executeMysql_All(conn, sql)
+    sql = "delete from chiResiduals where ocean = '" + ocean + "';"
+    utils.executeMysql_All(conn, sql)
+    sql = "delete from percentages where ocean = '" + ocean + "';"
+    utils.executeMysql_All(conn, sql)
 
     # get baseline data for each zone
     for zone in zoneList:
@@ -158,7 +130,6 @@ def compare(zoneList, ocean='pacific'):
     # define baseline ratios
     for zone in zoneList:
         zone["baselineRatio"] = zone.get("baselineCount") / float(baselineDrifterCount)
-        print zone.get("baselineRatio")
 
     # loop through intervals, running chi-square at each interval
     for interval in INTERVALS:
@@ -187,9 +158,11 @@ def compare(zoneList, ocean='pacific'):
             observed.append(zone.get("intervalObserved"))
             print('%s: baseline ratio: %f, no. drifters: %i, expected: %f, observed: %f'
                   % (zone.get('name'), zone.get("baselineRatio"), totalObserved, intervalExpected, zone.get("intervalObserved")))
-            # else:
-            #     print('%s (%s): ignored because of low values. baseline: %i, adjBase: %i, obs: %i'
-            #           % (zone.get('name'), interval, zoneBaselineValue, expectedValue, observedValue))
+            sql = "insert into chiResiduals (ocean, period, periodN, zone, residual) values('" + ocean + "', '" + str(interval) + "', " + str(totalObserved) + ", '" + zone.get("name").strip() + "', " + str(zone.get("intervalObserved") - intervalExpected) + ")"
+            utils.executeMysql_All(conn, sql)
+
+            sql = "insert into percentages (ocean, period, periodN, zone, percent) values('" + ocean + "', '" + str(interval) + "', " + str(totalObserved) + ", '" + zone.get("name").strip() + "', " + str((zone.get("intervalObserved") / float(totalObserved))) + ")"
+            utils.executeMysql_All(conn, sql)
 
         # perform and report on chi-square
         if len(expected) == 0:
@@ -197,8 +170,7 @@ def compare(zoneList, ocean='pacific'):
         else:
             chi = chisquare(np.array(observed), np.array(expected))
             print("** Chi-Squared Statistic: %f, p=%s" % (chi[0], chi[1]))
-            sql = "insert into chiSquareResults (ocean, period, chiStat, sig, sigStr) values('" + ocean + "', '" + str(interval) + "', " + str(chi[0]) + ", " + str("{0:.4f}".format(float(chi[1]))) + ", '" + str(float(chi[1])) + "')"
-            print sql
+            sql = "insert into chiSquareResults (ocean, period, n, chiStat, sig, sigStr) values('" + ocean + "', '" + str(interval) + "', " + str(totalObserved) + ", " + str(chi[0]) + ", " + str("{0:.2f}".format(float(chi[1]))) + ", '" + str(float(chi[1])) + "')"
             utils.executeMysql_All(conn, sql)
         print("**")
 
@@ -207,6 +179,12 @@ def compare(zoneList, ocean='pacific'):
             fishers(ocean, conn, interval, zone, zone.get("intervalExpected"), zone.get("intervalObserved"), baselineDrifterCount)
 
         print("\n\n")
+
+
+def generateOdds(oz, oa, ez, ea):
+    if ez == 0 or ea == 0: return None
+    OR = (oz / ez) / (oa / ea)
+    return OR
 
 
 def formatOdds(val):
@@ -233,34 +211,38 @@ def fishers(ocean, conn, interval, zone, zoneExpected, zoneObserved, globalCount
         print("** values too low")
     else:
         odds, pval = fisher_exact(np.array([[zoneObserved, notZoneObserved], [zoneExpected, notZoneExpected]]))
-        sql = "insert into fisherResults (ocean, zone, period, fisher, sig) values('" + ocean + "', '" + zone.get('name') + "', '" + str(interval) + "', " + formatOdds(odds) + ", " + str(pval) + ")"
+        fishers = robjects.r['fisher.test']
+        res_r = fishers(np.array([[zoneObserved, notZoneObserved], [zoneExpected, notZoneExpected]]))
+        r_p = res_r[0][0]
+        r_odds = res_r[2][0]
+        sql = "insert into fisherResults (ocean, zone, period, fisher, sig) values('" + ocean + "', '" + zone.get('name') + "', '" + str(interval) + "', " + formatOdds(r_odds) + ", " + str(r_p) + ")"
         utils.executeMysql_All(conn, sql)
-        print("** Fishers Exact: %s: odds: %s, p: %s" % (zone.get('name'), formatOdds(odds), pval))
+        print("** Fishers Exact: %s: odds: %s, r_odds: %s, r_p: %s, p: %s" % (zone.get('name'), formatOdds(odds), r_odds, r_p, pval))
 
 
 if __name__ == '__main__':
     """ main method. defines zones and runs main executable
     """
-    ZONES_PAC = [newZone('      Hawaii-convergence', 25.00001, 40, 140.00001, 160),
-                 newZone(' Central-pac-convergence', 25.00001, 40, 160.00001, 180),
-                 newZone('West-pacific-convergence', 20.00001, 35, -180.00001, -160),
-                 newZone('              North-east', 40.00001, 60, 120.00001, 180),
-                 newZone('              California', 25.00001, 40, 115.00001, 140),
-                 newZone('              South-east', 0.00001, 25, 75.00001, 180),
-                 newZone('              South-west', 0.00001, 20, -180.00001, -100),
-                 newZone('                   Japan', 20.00001, 35, -160.00001, -100),
-                 newZone('              North-west', 35.00001, 60, -180.00001, -100)
+    ZONES_PAC = [newZone('Eastern Garbage Patch', 25.00001, 45, 130.00001, 150),
+                 newZone('                 STCZ', 25.00001, 45, 150.00001, 180),
+                 newZone('Western Garbage Patch', 17.00001, 37, -180.00001, -160),
+                 newZone('           North-east', 45.00001, 60, 120.00001, 180),
+                 newZone('           California', 25.00001, 45, 115.00001, 130),
+                 newZone('           South-east', 0.0000, 25, 75.00001, 180),
+                 newZone('           South-west', 0.0000, 17, -180.00001, -100),
+                 newZone('                Japan', 17.00001, 37, -160.00001, -100),
+                 newZone('           North-west', 37.00001, 60, -180.00001, -100)
                  ]
 
-    ZONES_ATL = [newZone('        Sargasso-convergence', 20.00001, 35, 50.00001, 70),
-                 newZone('Central-atlantic-convergence', 27.00001, 40, 40.00001, 50),
-                 newZone('   East-atlantic-convergence', 27.00001, 40, 25.00001, 40),
-                 newZone('                  North-east', 40.00001, 60, 0.00001, 50),
-                 newZone('                      Europe', 27.00001, 40, 0.00001, 25),
-                 newZone('                  South-east', 0.00001, 27, -8.00001, 50),
-                 newZone('                  South-west', 0.00001, 20, 50.00001, 82),
-                 newZone('                  East-coast', 20.00001, 35, 70.00001, 82),
-                 newZone('                  North-west', 35.00001, 60, 50.00001, 82)
+    ZONES_ATL = [newZone('Sargasso Garbage Patch', 25.00001, 35, 50.00001, 70),
+                 newZone('                  STCZ', 27.00001, 37, 40.00001, 50),
+                 newZone(' Eastern Garbage Patch', 27.00001, 37, 25.00001, 40),
+                 newZone('            North-east', 37.00001, 60, 0.00001, 50),
+                 newZone('                Europe', 27.00001, 37, 0.00001, 25),
+                 newZone('            South-east', 0.00001, 27, -8.00001, 50),
+                 newZone('            South-west', 0.00001, 25, 50.00001, 82),
+                 newZone('            East-coast', 25.00001, 35, 70.00001, 82),
+                 newZone('            North-west', 35.00001, 60, 50.00001, 82)
                  ]
 
     ZONES_SARGASO_1_DEG = [newZone('s1', 34.00001, 35, 50, 70),
@@ -273,18 +255,44 @@ if __name__ == '__main__':
                            newZone('s1', 27.00001, 28, 50, 70),
                            newZone('s1', 26.00001, 27, 50, 70),
                            newZone('s1', 25.00001, 26, 50, 70),
-                           newZone('s1', 24, 25, 50, 70)]
+                           newZone('s1', 24.00001, 25, 50, 70),
+                           newZone('s1', 23.00001, 24, 50, 70),
+                           newZone('s1', 22.00001, 23, 50, 70),
+                           newZone('s1', 21.00001, 22, 50, 70),
+                           newZone('s1', 20, 21, 50, 70)]
 
-    ZONES_SARGASO_2_DEG = [newZone('s1', 40.00001, 42, 50, 70),
-                           newZone('s2', 38.00001, 40, 50, 70),
-                           newZone('s3', 36.00001, 38, 50, 70),
-                           newZone('s4', 34.00001, 36, 50, 70),
-                           newZone('s5', 32.00001, 34, 50, 70),
-                           newZone('s6', 30.00001, 32, 50, 70),
-                           newZone('s7', 28.00001, 30, 50, 70),
-                           newZone('s8', 26.00001, 28, 50, 70),
-                           newZone('s9', 24.00001, 26, 50, 70),
-                           newZone('s10', 22.00001, 24, 50, 70)]
+    ZONES_SARGASO_2_DEG = [newZone('34-36', 34.00001, 36, 50, 70),
+                           newZone('32-34', 32.00001, 34, 50, 70),
+                           newZone('30-32', 30.00001, 32, 50, 70),
+                           newZone('28-30', 28.00001, 30, 50, 70),
+                           newZone('26-28', 26.00001, 28, 50, 70),
+                           newZone('24-26', 24.00001, 26, 50, 70),
+                           newZone('22-24', 22.00001, 24, 50, 70),
+                           newZone('20-22', 20.00001, 22, 50, 70)]
 
-    compare(ZONES_ATL, ocean='atlantic')
+    ZONES_SARGASO_4_DEG = [newZone('                36-40', 36.00001, 40, 50, 70),
+                           newZone('                32-36', 32.00001, 36, 50, 70),
+                           newZone('                28-32', 28.00001, 32, 50, 70),
+                           newZone('                24-28', 24.00001, 28, 50, 70),
+                           newZone('                 STCZ', 27.00001, 37, 40.00001, 50),
+                           newZone('Eastern Garbage Patch', 27.00001, 37, 25.00001, 40),
+                           newZone('           North-east', 37.00001, 60, 0.00001, 50),
+                           newZone('               Europe', 27.00001, 37, 0.00001, 25),
+                           newZone('           South-east', 0.00001, 27, -8.00001, 50),
+                           newZone('           South-west', 0.00001, 24, 50.00001, 82),
+                           newZone('           East-coast', 24.00001, 40, 70.00001, 82),
+                           newZone('           North-west', 40.00001, 60, 50.00001, 82)]
+
+    ZONES_SARGASO_4_DEG = [newZone('36-40', 36.00001, 40, 50, 70),
+                           newZone('32-36', 32.00001, 36, 50, 70),
+                           newZone('28-32', 28.00001, 32, 50, 70),
+                           newZone('24-28', 24.00001, 28, 50, 70)]
+
+    ZONES_SARGASO_5_DEG = [newZone('35-40', 35.00001, 40, 50, 70),
+                           newZone('30-35', 30.00001, 35, 50, 70),
+                           newZone('25-30', 25.00001, 30, 50, 70),
+                           newZone('20-25', 20.00001, 25, 50, 70)]
+
+    #compare(ZONES_ATL, ocean='atlantic')
     #compare(ZONES_PAC, ocean='pacific')
+    compare(ZONES_SARGASO_4_DEG, ocean='atlantic')
