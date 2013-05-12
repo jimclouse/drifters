@@ -39,42 +39,6 @@ GDP_PAC_MERGETABLE_INDEX = alter table gdpPacAll add index(id, obsDate, obsTime)
 					   alter table gdpPacAll add index(obsDate, obsTime);\
 					   alter table gdpPacAll add index(obsTime, obsDate);
 
-GDP_INSERT = (id\
-					,obsDateTime\
-					,obsDate\
-					,obsTime\
-					,latitude\
-					,longitude\
-					,longitudeWest\
-					,sst\
-					,ewct\
-					,nsct\
-					,latError\
-					,longError\
-					,origExpNum\
-					,wmoPlatform\
-					,hasDrogue)\
-	select 			id\
-					,obsDate\
-					,date(obsDate) as obsDate\
-					,time(obsDate) as obsTime\
-					,latitude\
-					,longitude\
-					,-1.0 * longitude as longitudeWest\
-					,sst\
-					,ewct\
-					,nsct\
-					,latError\
-					,longError\
-					,origExpNum\
-					,wmoPlatform\
-					,hasDrogue\
-	from 			gdpPac$$number\
-	order by 		id\
-					,obsDate;
-
-GTS_TABLE_DEF = (Identifier int, Odate date, OTime time, Lat float, Lon float, QC_POS smallint ,PDT varchar(12), PTM varchar(12), Drogue varchar(24), SST float, QC_SST varchar(10), Airtemp float, QC_AirT varchar(10), Pressure float, QC_Pr varchar(10), WSp float, QC_WS varchar(10), WDir float, QC_WD varchar(10), RelHum float, QC_RH varchar(10))
-
 # load sql templates from file
 gdp_adjusted=`cat $(SQL_TEMPLATES)/gdp_adjusted.sql.tpl`
 gdp_yearable=`cat $(SQL_TEMPLATES)/gdp_yeartable.sql.tpl`
@@ -82,6 +46,8 @@ fisherResultsTable=`cat $(SQL_TEMPLATES)/fisherResults.sql.tpl`
 fn_significance=`cat $(SQL_TEMPLATES)/fn_significance.sql.tpl`
 chiSquareResults=`cat $(SQL_TEMPLATES)/chiSquareResults.sql.tpl`
 chiResiduals=`cat $(SQL_TEMPLATES)/chiResiduals.sql.tpl`
+percentages=`cat $(SQL_TEMPLATES)/percentages.sql.tpl`
+GDP_INSERT=`cat $(SQL_TEMPLATES)/gdp_insert.sql.tpl`
 
 
 default:
@@ -101,6 +67,12 @@ reassign:
 
 identify_convergence:
 	cd src; python identifyConvergence.py
+
+export_cohorts:
+	cd src; python exportCohorts.py
+
+analyze_env_data:
+	cd src; python envDataAnalysis.py
 
 interval_data:
 	cd src; python prepareIntervalData.py
@@ -136,22 +108,25 @@ load_gdp_pac_adj:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpPacAdj $(gdp_adjusted)";
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpPacAdj;";
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_PAC)gdpPacAll_adjusted.txt' into table gdpPacAdj fields terminated by ',' ;";
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "alter table gdpPacAdj add index(obsDate, id); alter table gdpPacAdj add index(id, obsDate);";
 
 load_gdp_atl_adj:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "create table if not exists gdpAtlAdj $(gdp_adjusted)";
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "truncate table gdpAtlAdj;";
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "load data local infile '$(DATA_PATH_ATL)gdpAtlAll_adjusted.csv' into table gdpAtlAdj fields terminated by ',' ;";
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "alter table gdpAtlAdj add index(obsDate, id); alter table gdpAtlAdj add index(id, obsDate);";
 
-single_view_gdp:
+
+single_view_gdp_atl:
 	# because mysql doesnt support materialized views, need to create a real table to add sufficient indexes
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_MERGETABLE_DROP)";
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_MERGEDTABLE_DEF)";
 
 	number=$(GDP_START_YEAR) ; while [[ $$number -le $(GDP_END_YEAR) ]] ; do \
-		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_INSERT)"; \
+		mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "insert into gdpAtlAll $(GDP_INSERT)"; \
 		((number = number + 1)) ; \
 	done
-	$(MAKE) gdp_all_index
+	$(MAKE) gdp_AtlAll_index
 
 single_view_gdp_pac:
 	# because mysql doesnt support materialized views, need to create a real table to add sufficient indexes
@@ -169,11 +144,12 @@ setup_results_tables:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(fn_significance)";
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(chiSquareResults)";
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(chiResiduals)";
+	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(percentages)";
 
 gdp_pacAll_index:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_PAC_MERGETABLE_INDEX)";
 
-gdp_all_index:
+gdp_AtlAll_index:
 	mysql --user=$(MYSQL_USER) --password=$(MYSQL_PASSWORD) $(MYSQL_DATABASE) -v -v --show_warnings -e "$(GDP_ATL_MERGETABLE_INDEX)";
 
 export_gdpPac:
